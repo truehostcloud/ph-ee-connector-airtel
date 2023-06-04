@@ -1,6 +1,6 @@
 FROM eclipse-temurin:17 AS build
 
-WORKDIR /ph-ee-connector-template
+WORKDIR /ph-ee-connector-airtel
 
 COPY . .
 
@@ -10,7 +10,7 @@ FROM eclipse-temurin:17
 
 WORKDIR /app
 
-COPY --from=build /ph-ee-connector-template/build/libs/ph-ee-connector-template.jar .
+COPY --from=build /ph-ee-connector-template/build/libs/ph-ee-connector-airtel.jar .
 
 EXPOSE 5000
 

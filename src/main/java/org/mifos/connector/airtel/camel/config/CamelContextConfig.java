@@ -1,4 +1,4 @@
-package org.mifos.connector.camel.config;
+package org.mifos.connector.airtel.camel.config;
 
 import java.util.HashMap;
 import org.apache.camel.CamelContext;

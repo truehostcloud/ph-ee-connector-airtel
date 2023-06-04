@@ -14,6 +14,19 @@ zeebe:
   broker:
     contactpoint: "localhost:26500"
 
+airtel:
+  api:
+    base-url: https://openapiuat.airtel.africa
+    auth-endpoint: /auth/oauth2/token
+    collection-endpoint: /merchant/v1/payments
+    status-endpoint: /standard/v1/payments
+  credentials:
+    client-id: "xyz"
+    client-secret: "abc"
+    grant-type: "client_credentials"
+  max-retry-count: 3
+  timeout: 6000
+
 management:
   endpoint:
     health:

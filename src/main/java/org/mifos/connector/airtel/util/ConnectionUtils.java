@@ -1,4 +1,4 @@
-package org.mifos.connector.util;
+package org.mifos.connector.airtel.util;
 
 /**
  * Contains utility methods for connection.
