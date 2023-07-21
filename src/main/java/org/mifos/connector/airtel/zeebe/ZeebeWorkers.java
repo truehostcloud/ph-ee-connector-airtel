@@ -3,6 +3,8 @@ package org.mifos.connector.airtel.zeebe;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.COLLECTION_REQUEST_BODY;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.COLLECTION_RESPONSE_BODY;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.CORRELATION_ID;
+import static org.mifos.connector.airtel.camel.config.CamelProperties.COUNTRY;
+import static org.mifos.connector.airtel.camel.config.CamelProperties.CURRENCY;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.DEPLOYED_PROCESS;
 import static org.mifos.connector.airtel.zeebe.ZeebeVariables.CHANNEL_REQUEST;
 import static org.mifos.connector.airtel.zeebe.ZeebeVariables.ERROR_CODE;
@@ -18,7 +20,6 @@ import static org.mifos.connector.airtel.zeebe.ZeebeVariables.TRANSFER_CREATE_FA
 import static org.mifos.connector.airtel.zeebe.ZeebeVariables.TRANSFER_MESSAGE;
 import static org.mifos.connector.airtel.zeebe.ZeebeVariables.ZEEBE_ELEMENT_INSTANCE_KEY;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.zeebe.client.ZeebeClient;
 import java.time.Duration;
 import java.util.Map;
@@ -27,8 +28,8 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.ProducerTemplate;
 import org.apache.camel.support.DefaultExchange;
+import org.json.JSONObject;
 import org.mifos.connector.airtel.dto.CollectionRequestDto;
-import org.mifos.connector.common.channel.dto.TransactionChannelC2BRequestDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,8 +47,6 @@ public class ZeebeWorkers {
 
     private final CamelContext camelContext;
 
-    private final ObjectMapper objectMapper;
-
     /**
      * Determines if an actual call to Airtel API will be made or not.
      */
@@ -57,26 +56,26 @@ public class ZeebeWorkers {
     @Value("${zeebe.client.evenly-allocated-max-jobs}")
     private int workerMaxJobs;
 
+    @Value("#{${countryCodes}}")
+    private Map<String, String> countryCodes;
+
     /**
      * Creates an instance of {@link ZeebeWorkers} with all required params.
      *
      * @param producerTemplate {@link ProducerTemplate}
      * @param zeebeClient      {@link ZeebeClient}
      * @param camelContext     {@link CamelContext}
-     * @param objectMapper     {@link ObjectMapper}
      */
     public ZeebeWorkers(ProducerTemplate producerTemplate, ZeebeClient zeebeClient,
-                        CamelContext camelContext, ObjectMapper objectMapper) {
+                        CamelContext camelContext) {
         this.producerTemplate = producerTemplate;
         this.zeebeClient = zeebeClient;
         this.camelContext = camelContext;
-        this.objectMapper = objectMapper;
     }
 
     /**
      * Sets up the necessary Zeebe workers for airtel money transactions.
      */
-    @SuppressWarnings("checkstyle:WhitespaceAfter")
     @PostConstruct
     public void setupWorkers() {
         zeebeClient.newWorker()
@@ -91,18 +90,21 @@ public class ZeebeWorkers {
                     variables.put(TRANSACTION_FAILED, false);
                     variables.put(TRANSFER_CREATE_FAILED, false);
                 } else {
-                    TransactionChannelC2BRequestDTO channelRequest = objectMapper.readValue(
-                        (String) variables.get(CHANNEL_REQUEST),
-                        TransactionChannelC2BRequestDTO.class);
+                    JSONObject channelRequest =
+                        new JSONObject((String) variables.get(CHANNEL_REQUEST));
                     String transactionId = (String) variables.get(TRANSACTION_ID);
 
                     CollectionRequestDto collectionRequestDto = CollectionRequestDto
-                        .fromChannelRequest(channelRequest, transactionId);
+                        .fromChannelRequest(channelRequest, transactionId, countryCodes);
                     logger.info(collectionRequestDto.toString());
                     Exchange exchange = new DefaultExchange(camelContext);
                     exchange.setProperty(COLLECTION_REQUEST_BODY, collectionRequestDto);
                     exchange.setProperty(CORRELATION_ID, transactionId);
                     exchange.setProperty(DEPLOYED_PROCESS, job.getBpmnProcessId());
+                    exchange.setProperty(COUNTRY, collectionRequestDto.getTransaction()
+                        .getCountry());
+                    exchange.setProperty(CURRENCY, collectionRequestDto.getTransaction()
+                        .getCurrency());
 
                     variables.put(COLLECTION_REQUEST_BODY, collectionRequestDto.toString());
 
@@ -161,11 +163,10 @@ public class ZeebeWorkers {
                     logger.info("Published Variables");
                 } else {
                     logger.info("Trying count: " + retryCount);
-                    TransactionChannelC2BRequestDTO channelRequest = objectMapper.readValue(
-                        (String) variables.get(CHANNEL_REQUEST),
-                        TransactionChannelC2BRequestDTO.class);
+                    JSONObject channelRequest =
+                        new JSONObject((String) variables.get(CHANNEL_REQUEST));
                     CollectionRequestDto collectionRequestDto = CollectionRequestDto
-                        .fromChannelRequest(channelRequest, transactionId);
+                        .fromChannelRequest(channelRequest, transactionId, countryCodes);
                     Exchange exchange = new DefaultExchange(camelContext);
                     exchange.setProperty(CORRELATION_ID, variables.get("transactionId"));
                     exchange.setProperty(TRANSACTION_ID, variables.get("transactionId"));
@@ -173,6 +174,10 @@ public class ZeebeWorkers {
                     exchange.setProperty(ZEEBE_ELEMENT_INSTANCE_KEY, job.getElementInstanceKey());
                     exchange.setProperty(TIMER, variables.get(TIMER));
                     exchange.setProperty(DEPLOYED_PROCESS, job.getBpmnProcessId());
+                    exchange.setProperty(COUNTRY, collectionRequestDto.getTransaction()
+                        .getCountry());
+                    exchange.setProperty(CURRENCY, collectionRequestDto.getTransaction()
+                        .getCurrency());
                     producerTemplate.send("direct:get-transaction-status-base", exchange);
                 }
                 client.newCompleteCommand(job.getKey())

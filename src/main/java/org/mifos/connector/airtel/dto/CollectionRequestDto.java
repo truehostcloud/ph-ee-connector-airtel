@@ -1,7 +1,8 @@
 package org.mifos.connector.airtel.dto;
 
-import org.mifos.connector.common.channel.dto.TransactionChannelC2BRequestDTO;
-import org.mifos.connector.common.gsma.dto.GsmaParty;
+import java.math.BigDecimal;
+import java.util.Map;
+import org.json.JSONObject;
 
 /**
  * DTO representing collection request body.
@@ -44,7 +45,10 @@ public class CollectionRequestDto {
             + '}';
     }
 
-    static class Subscriber {
+    /**
+     * Holds data about the Airtel subscriber.
+     */
+    public static class Subscriber {
         private String country;
         private String currency;
         private Long msisdn;
@@ -83,17 +87,20 @@ public class CollectionRequestDto {
         }
     }
 
-    static class Transaction {
-        private Long amount;
+    /**
+     * Holds Airtel transaction data.
+     */
+    public static class Transaction {
+        private BigDecimal amount;
         private String country;
         private String currency;
         private String id;
 
-        public Long getAmount() {
+        public BigDecimal getAmount() {
             return amount;
         }
 
-        public void setAmount(Long amount) {
+        public void setAmount(BigDecimal amount) {
             this.amount = amount;
         }
 
@@ -133,29 +140,29 @@ public class CollectionRequestDto {
     }
 
     /**
-     * Creates a {@link CollectionRequestDto} using data from
-     * {@link TransactionChannelC2BRequestDTO}.
+     * Creates a {@link CollectionRequestDto} using data from the channel request body.
      *
-     * @param transactionChannelRequestDto {@link TransactionChannelC2BRequestDTO}
-     * @param transactionId                ID of the transaction
+     * @param channelRequest {@link JSONObject}
+     * @param transactionId  ID of the transaction
+     * @param countryCodes   a map with currency as key and country code as value
      * @return {@link CollectionRequestDto}
      */
     public static CollectionRequestDto fromChannelRequest(
-        TransactionChannelC2BRequestDTO transactionChannelRequestDto, String transactionId) {
-        GsmaParty[] payer = transactionChannelRequestDto.getPayer();
+        JSONObject channelRequest, String transactionId, Map<String, String> countryCodes) {
+        JSONObject amountJson = channelRequest.getJSONObject("amount");
         Subscriber subscriber = new Subscriber();
-        subscriber.currency = transactionChannelRequestDto.getAmount().getCurrency();
-        if (payer[0].getKey().equals("MSISDN")) {
-            // case where 1st array element is MSISDN
-            subscriber.msisdn = Long.parseLong(payer[0].getValue().trim());
-        } else {
-            // case where 1st array element is ACCOUNTID
-            subscriber.msisdn = Long.parseLong(payer[1].getValue().trim());
-        }
+        String currency = amountJson.getString("currency");
+        String country = countryCodes.get(currency.toLowerCase());
+        subscriber.currency = currency;
+        subscriber.country = country;
+        String phoneNumber = channelRequest.getJSONObject("payer")
+            .getJSONObject("partyIdInfo").getString("partyIdentifier");
+        // Remove country code in phone number
+        subscriber.msisdn = Long.valueOf(phoneNumber.substring(4));
         Transaction transaction = new Transaction();
-        transaction.amount = Long.parseLong(transactionChannelRequestDto.getAmount()
-            .getAmount().trim());
-        transaction.currency = transactionChannelRequestDto.getAmount().getCurrency();
+        transaction.amount = amountJson.getBigDecimal("amount");
+        transaction.currency = currency;
+        transaction.country = country;
         transaction.id = transactionId;
         CollectionRequestDto collectionRequestDto = new CollectionRequestDto();
         collectionRequestDto.setReference("Payment to OAF");

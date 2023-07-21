@@ -14,6 +14,9 @@ zeebe:
   broker:
     contactpoint: "localhost:26500"
 
+skip:
+  enabled: false
+
 airtel:
   api:
     base-url: https://openapiuat.airtel.africa
@@ -26,6 +29,12 @@ airtel:
     grant-type: "client_credentials"
   max-retry-count: 3
   timeout: 6000
+
+countryCodes:
+  rwf: RW
+  ugx: UG
+  kes: KE
+
 
 management:
   endpoint:
