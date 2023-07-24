@@ -7,6 +7,8 @@ import org.apache.camel.util.json.JsonObject;
  */
 public class ZeebeUtils {
 
+    private ZeebeUtils() {}
+
     /**
      * Creates a timestamp representing when transfer was completed.
      *

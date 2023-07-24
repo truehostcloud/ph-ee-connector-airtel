@@ -150,7 +150,6 @@ public class ZeebeWorkers {
                 String transactionId = (String) variables.get(TRANSACTION_ID);
                 if (skipAirtelMoney) {
                     logger.info("Skipping Airtel Money...");
-                    Exchange exchange = new DefaultExchange(camelContext);
                     variables.put(TRANSACTION_FAILED, false);
                     variables.put(TRANSFER_CREATE_FAILED, false);
                     zeebeClient.newPublishMessageCommand()
@@ -162,7 +161,7 @@ public class ZeebeWorkers {
                         .join();
                     logger.info("Published Variables");
                 } else {
-                    logger.info("Trying count: " + retryCount);
+                    logger.info("Trying count: {}", retryCount);
                     JSONObject channelRequest =
                         new JSONObject((String) variables.get(CHANNEL_REQUEST));
                     CollectionRequestDto collectionRequestDto = CollectionRequestDto

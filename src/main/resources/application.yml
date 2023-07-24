@@ -35,7 +35,6 @@ countryCodes:
   ugx: UG
   kes: KE
 
-
 management:
   endpoint:
     health:

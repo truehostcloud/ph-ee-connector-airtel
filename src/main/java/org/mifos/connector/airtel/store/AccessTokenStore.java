@@ -13,7 +13,6 @@ public class AccessTokenStore {
 
     public AccessTokenStore() {
         this.expiresOn = LocalDateTime.now();
-        System.out.println("ACCESS TOKEN STORE CREATED!");
     }
 
     public String getAccessToken() {

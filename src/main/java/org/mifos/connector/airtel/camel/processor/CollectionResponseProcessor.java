@@ -57,6 +57,60 @@ public class CollectionResponseProcessor implements Processor {
     public void process(Exchange exchange) throws JsonProcessingException {
         Map<String, Object> variables = new HashMap<>();
         Object updatedRetryCount = exchange.getProperty(SERVER_TRANSACTION_STATUS_RETRY_COUNT);
+        setTransactionStatusResponseVariables(exchange, variables, updatedRetryCount);
+
+        // Update timer (when next to attempt getting the transaction status) if the transaction
+        // is pending and the number of retries hasn't been exceeded.
+        Boolean isRetryExceeded = exchange.getProperty(IS_RETRY_EXCEEDED, Boolean.class);
+        Boolean isTransactionPending = exchange.getProperty(IS_TRANSACTION_PENDING, Boolean.class);
+        if (Boolean.TRUE.equals(isTransactionPending)
+            && (isRetryExceeded == null || !isRetryExceeded)) {
+            String newTimer = getNextTimer(exchange.getProperty(TIMER, String.class));
+            logger.info("Updating retry count to {}", updatedRetryCount);
+            logger.info("Updating timer value to {}", newTimer);
+            variables.put(TIMER, newTimer);
+            Long elementInstanceKey = (Long) exchange.getProperty(ZEEBE_ELEMENT_INSTANCE_KEY);
+            zeebeClient.newSetVariablesCommand(elementInstanceKey)
+                .variables(variables)
+                .send()
+                .join();
+            return;
+        }
+
+        handleTransactionOutcome(exchange, variables, isRetryExceeded);
+        variables.put(TRANSFER_RESPONSE_CREATE, ZeebeUtils.getTransferResponseCreateJson());
+
+        String correlationId = exchange.getProperty(TRANSACTION_ID, String.class);
+        if (correlationId == null) {
+            JsonObject response = new JsonObject();
+            response.put("developerMessage", "Can't find the correlation ID for the provided "
+                + "callback. It might be possible that either transaction doesn't "
+                + "exist or this is a test hit");
+            response.put("zeebeVariables", objectMapper.writeValueAsString(variables));
+            exchange.getIn().setBody(response.toJson());
+            return;
+        }
+        logger.info("Publishing transaction message variables: {}", variables);
+        zeebeClient.newPublishMessageCommand()
+            .messageName(TRANSFER_MESSAGE)
+            .correlationKey(correlationId)
+            .timeToLive(Duration.ofMillis(timeToLive))
+            .variables(variables)
+            .send()
+            .join();
+    }
+
+    /**
+     * Sets Zeebe variables that'd hold the transaction response status and body returned by Airtel
+     * transaction status API.
+     *
+     * @param exchange          {@link Exchange}
+     * @param variables         key/value pair of Zeebe variables.
+     * @param updatedRetryCount number of times the Airtel transaction status API has been called.
+     */
+    private void setTransactionStatusResponseVariables(Exchange exchange,
+                                                       Map<String, Object> variables,
+                                                       Object updatedRetryCount) {
         if (updatedRetryCount != null) {
             variables.put(SERVER_TRANSACTION_STATUS_RETRY_COUNT, updatedRetryCount);
             Boolean isRetryExceeded = (Boolean) exchange.getProperty(IS_RETRY_EXCEEDED);
@@ -76,23 +130,18 @@ public class CollectionResponseProcessor implements Processor {
                 variables.put(GET_TRANSACTION_STATUS_RESPONSE_CODE, statusCode);
             }
         }
+    }
 
-        Boolean isRetryExceeded = exchange.getProperty(IS_RETRY_EXCEEDED, Boolean.class);
-        Boolean isTransactionPending = exchange.getProperty(IS_TRANSACTION_PENDING, Boolean.class);
-        if (Boolean.TRUE.equals(isTransactionPending)
-            && (isRetryExceeded == null || !isRetryExceeded)) {
-            String newTimer = getNextTimer(exchange.getProperty(TIMER, String.class));
-            logger.info("Updating retry count to " + updatedRetryCount);
-            logger.info("Updating timer value to " + newTimer);
-            variables.put(TIMER, newTimer);
-            Long elementInstanceKey = (Long) exchange.getProperty(ZEEBE_ELEMENT_INSTANCE_KEY);
-            zeebeClient.newSetVariablesCommand(elementInstanceKey)
-                .variables(variables)
-                .send()
-                .join();
-            return;
-        }
-
+    /**
+     * Checks if the transaction failed or succeeded, and sets the relevant zeebe variables.
+     *
+     * @param exchange        {@link Exchange}
+     * @param variables       key/value pair of Zeebe variables.
+     * @param isRetryExceeded boolean flag that tells if the number of allowed retries has been
+     *                        exceeded or not.
+     */
+    private void handleTransactionOutcome(Exchange exchange, Map<String, Object> variables,
+                                          Boolean isRetryExceeded) {
         Boolean transactionFailed = exchange.getProperty(TRANSACTION_FAILED, Boolean.class);
         if (Boolean.TRUE.equals(transactionFailed)) {
             variables.put(TRANSACTION_FAILED, true);
@@ -117,25 +166,5 @@ public class CollectionResponseProcessor implements Processor {
                 variables.put(CALLBACK_RECEIVED, exchange.getProperty(CALLBACK_RECEIVED));
             }
         }
-        variables.put(TRANSFER_RESPONSE_CREATE, ZeebeUtils.getTransferResponseCreateJson());
-
-        String correlationId = exchange.getProperty(TRANSACTION_ID, String.class);
-        if (correlationId == null) {
-            JsonObject response = new JsonObject();
-            response.put("developerMessage", "Can't find the correlation ID for the provided "
-                + "callback. It might be possible that either transaction doesn't "
-                + "exist or this is a test hit");
-            response.put("zeebeVariables", objectMapper.writeValueAsString(variables));
-            exchange.getIn().setBody(response.toJson());
-            return;
-        }
-        logger.info("Publishing transaction message variables: " + variables);
-        zeebeClient.newPublishMessageCommand()
-            .messageName(TRANSFER_MESSAGE)
-            .correlationKey(correlationId)
-            .timeToLive(Duration.ofMillis(timeToLive))
-            .variables(variables)
-            .send()
-            .join();
     }
 }

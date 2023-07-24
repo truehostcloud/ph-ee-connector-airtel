@@ -5,6 +5,8 @@ package org.mifos.connector.airtel.util;
  */
 public class ConnectionUtils {
 
+    private ConnectionUtils() {}
+
     /**
      * returns camel dsl for applying connection timeout.
      *
