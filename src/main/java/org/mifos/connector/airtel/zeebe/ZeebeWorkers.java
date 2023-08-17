@@ -159,7 +159,6 @@ public class ZeebeWorkers {
                         .variables(variables)
                         .send()
                         .join();
-                    logger.info("Published Variables");
                 } else {
                     logger.info("Trying count: {}", retryCount);
                     JSONObject channelRequest =
@@ -170,6 +169,7 @@ public class ZeebeWorkers {
                     exchange.setProperty(CORRELATION_ID, variables.get("transactionId"));
                     exchange.setProperty(TRANSACTION_ID, variables.get("transactionId"));
                     exchange.setProperty(COLLECTION_REQUEST_BODY, collectionRequestDto);
+                    exchange.setProperty(SERVER_TRANSACTION_STATUS_RETRY_COUNT, retryCount);
                     exchange.setProperty(ZEEBE_ELEMENT_INSTANCE_KEY, job.getElementInstanceKey());
                     exchange.setProperty(TIMER, variables.get(TIMER));
                     exchange.setProperty(DEPLOYED_PROCESS, job.getBpmnProcessId());

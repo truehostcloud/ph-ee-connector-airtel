@@ -158,7 +158,9 @@ public class CollectionRequestDto {
         String phoneNumber = channelRequest.getJSONObject("payer")
             .getJSONObject("partyIdInfo").getString("partyIdentifier");
         // Remove country code in phone number
-        subscriber.msisdn = Long.valueOf(phoneNumber.substring(4));
+        subscriber.msisdn = phoneNumber.startsWith("+")
+            ? Long.valueOf(phoneNumber.substring(4)) :
+            Long.valueOf(phoneNumber.substring(3));
         Transaction transaction = new Transaction();
         transaction.amount = amountJson.getBigDecimal("amount");
         transaction.currency = currency;

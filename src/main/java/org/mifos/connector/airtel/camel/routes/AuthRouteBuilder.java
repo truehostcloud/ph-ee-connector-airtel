@@ -62,7 +62,7 @@ public class AuthRouteBuilder extends RouteBuilder {
             .setHeader("Content-Type", constant("application/json"))
             .setBody(exchange -> airtelProps.getCredentials())
             .marshal().json(JsonLibrary.Jackson)
-            .toD(airtelProps.getApi().getAuthEndpoint() + airtelProps.getApi().getAuthEndpoint()
+            .toD(airtelProps.getApi().getBaseUrl() + airtelProps.getApi().getAuthEndpoint()
                 + "?bridgeEndpoint=true&throwExceptionOnFailure=false&"
                 + ConnectionUtils.getConnectionTimeoutDsl(airtelProps.getTimeout()));
 

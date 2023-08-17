@@ -110,19 +110,21 @@ public class AirtelMoneyRouteBuilder extends RouteBuilder {
             .id("collection-response-handler")
             .choice()
             .when(header(Exchange.HTTP_RESPONSE_CODE).isEqualTo("200"))
-            .log(LoggingLevel.INFO, "Collection request successful")
-            .setProperty(TRANSACTION_FAILED, constant(false))
-            .otherwise()
-            .log(LoggingLevel.ERROR, "Collection request unsuccessful")
             .unmarshal().json(CollectionResponseDto.class)
             .process(exchange -> {
-                exchange.setProperty(TRANSACTION_FAILED, true);
-                CollectionResponseDto.Status status = exchange.getIn()
+                CollectionResponseDto.Status collectionStatus = exchange.getIn()
                     .getBody(CollectionResponseDto.class).getStatus();
-                exchange.setProperty(ERROR_CODE, status.getResponseCode());
-                exchange.setProperty(ERROR_DESCRIPTION, status.getMessage());
-                exchange.setProperty(ERROR_INFORMATION, exchange.getIn().getBody(String.class));
-            });
+                if (collectionStatus.isSuccess()) {
+                    exchange.setProperty(TRANSACTION_FAILED, false);
+                } else {
+                    exchange.setProperty(TRANSACTION_FAILED, true);
+                    exchange.setProperty(ERROR_CODE, collectionStatus.getResponseCode());
+                    exchange.setProperty(ERROR_DESCRIPTION, collectionStatus.getMessage());
+                    exchange.setProperty(ERROR_INFORMATION, exchange.getIn().getBody(String.class));
+                }
+            })
+            .otherwise()
+            .process(exchange -> setErrorDataForNon200Response(exchange, "Collection"));
 
         /*
          * Starts the payment flow
@@ -175,30 +177,30 @@ public class AirtelMoneyRouteBuilder extends RouteBuilder {
             .unmarshal().json(CollectionResponseDto.class)
             .choice()
             .when(header(Exchange.HTTP_RESPONSE_CODE).isEqualTo("200"))
-            .log(LoggingLevel.INFO, "Transaction status request successful")
             .process(exchange -> {
                 CollectionResponseDto response = exchange.getIn()
                     .getBody(CollectionResponseDto.class);
-                CollectionResponseDto.Data.Transaction transactionData = response.getData()
-                    .getTransaction();
-                if ("TS".equals(transactionData.getStatus())) {
-                    exchange.setProperty(TRANSACTION_FAILED, false);
-                    exchange.setProperty(AIRTEL_MONEY_ID, transactionData.getAirtelMoneyId());
-                } else if ("TF".equals(transactionData.getStatus())) {
-                    exchange.setProperty(TRANSACTION_FAILED, true);
-                    CollectionResponseDto.Status status = response.getStatus();
-                    exchange.setProperty(ERROR_CODE, status.getResponseCode());
-                    exchange.setProperty(ERROR_DESCRIPTION, status.getMessage());
-                    exchange.setProperty(ERROR_INFORMATION, exchange.getIn().getBody(String.class));
+                CollectionResponseDto.Status collectionStatus = response.getStatus();
+                if (collectionStatus.isSuccess()) {
+                    CollectionResponseDto.Data.Transaction transactionData = response.getData()
+                        .getTransaction();
+                    if ("TS".equals(transactionData.getStatus())) {
+                        exchange.setProperty(TRANSACTION_FAILED, false);
+                        exchange.setProperty(AIRTEL_MONEY_ID, transactionData.getAirtelMoneyId());
+                    } else if ("TF".equals(transactionData.getStatus())) {
+                        setErrorDataForFailedTransaction(exchange, collectionStatus,
+                            transactionData);
+                    } else {
+                        exchange.setProperty(IS_TRANSACTION_PENDING, true);
+                    }
                 } else {
-                    exchange.setProperty(IS_TRANSACTION_PENDING, true);
+                    setErrorDataForFailedTransaction(exchange, collectionStatus, null);
                 }
                 exchange.setProperty(LAST_RESPONSE_BODY, exchange.getIn().getBody(String.class));
             })
             .process(collectionResponseProcessor)
             .otherwise()
-            .log(LoggingLevel.ERROR, "Transaction status request unsuccessful")
-            .process(exchange -> logger.error("Body:" + exchange.getIn().getBody(String.class)))
+            .process(exchange -> setErrorDataForNon200Response(exchange, "Transaction enquiry"))
             .setProperty(TRANSACTION_FAILED, constant(true))
             .process(collectionResponseProcessor);
 
@@ -209,7 +211,10 @@ public class AirtelMoneyRouteBuilder extends RouteBuilder {
             .id("collections-callback")
             .log(LoggingLevel.INFO, "Callback body \n\n..\n\n..\n\n.. ${body}")
             .unmarshal().json(CallbackDto.class)
-            .to("direct:callback-handler");
+            .to("direct:callback-handler")
+            .setHeader(Exchange.HTTP_RESPONSE_CODE, constant(202))
+            .setBody(constant(""));
+
 
         /*
          * Handles Airtel callback request
@@ -225,8 +230,7 @@ public class AirtelMoneyRouteBuilder extends RouteBuilder {
                 exchange.setProperty(CALLBACK, callbackDto.toString());
                 exchange.setProperty(AIRTEL_MONEY_ID, transaction.getAirtelMoneyId());
 
-                logger.info("\n\n MTN Callback " + callbackDto + "\n");
-                logger.info("\n\n Correlation Key " + transaction.getId());
+                logger.info("Airtel callback request body {} ", callbackDto);
 
                 if ("TS".equals(transaction.getStatusCode())) {
                     exchange.setProperty(TRANSACTION_FAILED, false);
@@ -242,5 +246,38 @@ public class AirtelMoneyRouteBuilder extends RouteBuilder {
             .otherwise()
             .log("Transaction is in intermediate state. "
                 + "Hence, an attempt will be made to get transaction status later");
+    }
+
+    /**
+     * Adds error data to the exchange when HTTP response status code is not 200.
+     *
+     * @param exchange {@link Exchange}
+     * @param resource the API resource
+     */
+    private void setErrorDataForNon200Response(Exchange exchange, String resource) {
+        exchange.setProperty(TRANSACTION_FAILED, true);
+        exchange.setProperty(ERROR_CODE, exchange.getIn().getHeader(Exchange.HTTP_RESPONSE_CODE));
+        exchange.setProperty(ERROR_DESCRIPTION, resource + " API response status is not a 200");
+        exchange.setProperty(ERROR_INFORMATION, exchange.getIn().getBody(String.class));
+    }
+
+    /**
+     * Adds error data to the exchange when HTTP response status code is 200 but the transaction
+     * has failed.
+     *
+     * @param exchange         {@link Exchange}
+     * @param collectionStatus {@link CollectionResponseDto.Status}
+     * @param transactionData  {@link CollectionResponseDto.Data.Transaction}
+     */
+    private void setErrorDataForFailedTransaction(Exchange exchange,
+                                                  CollectionResponseDto.Status collectionStatus,
+                                                  CollectionResponseDto.Data.Transaction
+                                                      transactionData) {
+        String errorDescription = transactionData != null ? transactionData.getMessage() :
+            collectionStatus.getMessage();
+        exchange.setProperty(TRANSACTION_FAILED, true);
+        exchange.setProperty(ERROR_CODE, collectionStatus.getResponseCode());
+        exchange.setProperty(ERROR_DESCRIPTION, errorDescription);
+        exchange.setProperty(ERROR_INFORMATION, exchange.getIn().getBody(String.class));
     }
 }

@@ -10,8 +10,8 @@ FROM eclipse-temurin:17
 
 WORKDIR /app
 
-COPY --from=build /ph-ee-connector-template/build/libs/ph-ee-connector-airtel.jar .
+COPY --from=build /ph-ee-connector-airtel/build/libs/ph-ee-connector-airtel.jar .
 
 EXPOSE 5000
 
-ENTRYPOINT ["java", "-jar", "/app/ph-ee-connector-template.jar"]
+ENTRYPOINT ["java", "-jar", "/app/ph-ee-connector-airtel.jar"]

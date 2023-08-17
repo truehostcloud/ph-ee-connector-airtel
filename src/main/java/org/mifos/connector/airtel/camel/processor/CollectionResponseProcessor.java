@@ -81,15 +81,6 @@ public class CollectionResponseProcessor implements Processor {
         variables.put(TRANSFER_RESPONSE_CREATE, ZeebeUtils.getTransferResponseCreateJson());
 
         String correlationId = exchange.getProperty(TRANSACTION_ID, String.class);
-        if (correlationId == null) {
-            JsonObject response = new JsonObject();
-            response.put("developerMessage", "Can't find the correlation ID for the provided "
-                + "callback. It might be possible that either transaction doesn't "
-                + "exist or this is a test hit");
-            response.put("zeebeVariables", objectMapper.writeValueAsString(variables));
-            exchange.getIn().setBody(response.toJson());
-            return;
-        }
         logger.info("Publishing transaction message variables: {}", variables);
         zeebeClient.newPublishMessageCommand()
             .messageName(TRANSFER_MESSAGE)
