@@ -10,30 +10,77 @@ pr:
 pool:
   vmImage: "ubuntu-latest"
 
+variables:
+  # Exposes GITGUARDIAN_API_KEY and GITHUB_TOKEN
+  - group: CodeScanningTools
+
 steps:
+  - checkout: self
+    fetchDepth: 0
+    fetchTags: true
+    displayName: Check out source code
+    # This is required to allow MegaLinter to run git commands
+    persistCredentials: true
+
+  - task: GetRevision@1
+    displayName: "Get Revision"
+    inputs:
+      VariableName: Revision
+
   - script: |
       VERSION_TAG=`git describe --abbrev=0 --tags`
       echo "##vso[task.setvariable variable=VERSION_TAG]$VERSION_TAG"
-      IMAGE_TAGS="${VERSION_TAG}"
+      IMAGE_TAGS="${VERSION_TAG}.$(date '+%Y.%m.%d').$(Revision)"
       echo "##vso[task.setvariable variable=IMAGE_SEMANTIC_HASH]$IMAGE_TAGS"
-      if [[ "$(Build.SourceBranch)" == "refs/heads/main" ]]; then IMAGE_TAGS="$IMAGE_TAGS,latest"; fi;
+      if [[ "$(Build.SourceBranch)" == "refs/heads/main" ]]; then IMAGE_TAGS="$VERSION_TAG,latest"; fi;
       echo Tags: $IMAGE_TAGS
       echo "##vso[task.setvariable variable=IMAGE_TAGS]$IMAGE_TAGS"
-    displayName: Get git tag
+    displayName: Generate image tags
 
   - script: |
+      docker run \
+        -v $(pwd):/data \
+        --env-file <(env | grep -e SYSTEM_ -e BUILD_ -e TF_ -e AGENT_) \
+        -e CI=true \
+        -e GITGUARDIAN_API_KEY \
+        gitguardian/ggshield:latest ggshield secret scan ci
+    condition: succeededOrFailed()
+    displayName: GitGuardian Scan
+    env:
+      GITGUARDIAN_API_KEY: $(GITGUARDIAN_API_KEY)
+
+  - script: |
+      # Initialize variables
+      if [[ "${BUILD_REASON}" == "PullRequest" ]]; then
+        echo "This is a PR build, scanning delta only, and posting check to PR head instead of local merge commit"
+        export VALIDATE_ALL_CODEBASE=false
+        # Hack to determine the commit hash of the PR's head, from the comment on the local merge commit
+        # See https://github.com/oxsecurity/megalinter/issues/1279
+        export GITHUB_SHA=$(git log -1 --pretty=%B | sed -e 's/^Merge //' -e 's/ into.*//')
+      else
+        echo "This is a regular build"
+        export VALIDATE_ALL_CODEBASE=true
+        export GITHUB_SHA=${BUILD_SOURCEVERSION}
+      fi
+
+      echo "VALIDATE_ALL_CODEBASE=${VALIDATE_ALL_CODEBASE}"
+      echo "GITHUB_SHA=${GITHUB_SHA}"
+
       docker run -v "$(System.DefaultWorkingDirectory):/tmp/lint" \
-      -e GIT_AUTHORIZATION_BEARER=$(System.AccessToken) \
-      -e CI=true \
-      -e TF_BUILD=true \
-      -e SYSTEM_ACCESSTOKEN=$(System.AccessToken) \
-      -e SYSTEM_COLLECTIONURI=$(System.CollectionUri) \
-      -e SYSTEM_PULLREQUEST_PULLREQUESTID=$(System.PullRequest.PullRequestId) \
-      -e SYSTEM_TEAMPROJECT=$(System.TeamProject) \
-      -e BUILD_BUILD_ID=$(Build.BuildId) \
-      -e BUILD_REPOSITORY_ID=$(Build.Repository.ID) \
-      oxsecurity/megalinter-java:v6
+        -e GITHUB_TOKEN \
+        -e VALIDATE_ALL_CODEBASE \
+        -e APPLY_FIXES=none \
+        -e GITHUB_STATUS_REPORTER=true \
+        -e GITHUB_COMMENT_REPORTER=true \
+        -e CI=true \
+        -e GITHUB_REF=$(Build.SourceBranch) \
+        -e GITHUB_REPOSITORY=$(Build.Repository.ID) \
+        -e GITHUB_TARGET_URL="$(System.CollectionUri)$(System.TeamProject)/_build/results?buildId=$(Build.BuildId)&view=logs" \
+        -e GITHUB_SHA \
+        oxsecurity/megalinter-java:v7
     displayName: Run MegaLinter
+    env:
+      GITHUB_TOKEN: $(GITHUB_TOKEN)
 
   - task: Docker@2
     displayName: Login to Azure registry
@@ -45,7 +92,7 @@ steps:
     displayName: Build and push image to container registry
     inputs:
       command: buildAndPush
-      repository: "oneacrefund/connector-template"
+      repository: "oneacrefund/airtel-connector"
       dockerfile: "$(System.DefaultWorkingDirectory)/Dockerfile"
       containerRegistry: "azurecr-oaf"
       tags: |
@@ -53,7 +100,8 @@ steps:
 
   - task: PublishBuildArtifacts@1
     displayName: Publish configuration package
+    condition: and(succeeded(), or(eq(variables['Build.SourceBranchName'], 'main'), eq(variables['Build.SourceBranchName'], 'develop'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')))
     inputs:
       PathtoPublish: $(Build.ArtifactStagingDirectory)
-      ArtifactName: "connector-template"
+      ArtifactName: "airtel-connector"
       publishLocation: "Container"

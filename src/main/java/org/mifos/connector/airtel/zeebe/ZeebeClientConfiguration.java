@@ -1,4 +1,4 @@
-package org.mifos.connector.zeebe;
+package org.mifos.connector.airtel.zeebe;
 
 import io.camunda.zeebe.client.ZeebeClient;
 import org.springframework.beans.factory.annotation.Value;
