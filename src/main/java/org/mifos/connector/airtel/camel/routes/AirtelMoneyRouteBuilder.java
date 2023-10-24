@@ -3,6 +3,7 @@ package org.mifos.connector.airtel.camel.routes;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.ACCESS_TOKEN;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.COLLECTION_REQUEST_BODY;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.COLLECTION_RESPONSE_BODY;
+import static org.mifos.connector.airtel.camel.config.CamelProperties.COLLECTION_TRANSACTION_ID;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.IS_RETRY_EXCEEDED;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.IS_TRANSACTION_PENDING;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.LAST_RESPONSE_BODY;
@@ -29,6 +30,7 @@ import org.mifos.connector.airtel.store.AccessTokenStore;
 import org.mifos.connector.airtel.util.ConnectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -40,6 +42,8 @@ public class AirtelMoneyRouteBuilder extends RouteBuilder {
     private final AccessTokenStore accessTokenStore;
     private final AirtelProps airtelProps;
     private final CollectionResponseProcessor collectionResponseProcessor;
+    @Value("${transaction-id-prefix}")
+    private String transactionIdPrefix;
 
     /**
      * Creates an instance of {@link AirtelMoneyRouteBuilder} with all required params.
@@ -164,10 +168,11 @@ public class AirtelMoneyRouteBuilder extends RouteBuilder {
             .setHeader("X-Currency", simple("${exchangeProperty.currency}"))
             .setHeader("Authorization", simple("Bearer ${exchangeProperty." + ACCESS_TOKEN + "}"))
             .toD(airtelProps.getApi().getBaseUrl() + airtelProps.getApi().getStatusEndpoint()
-                + "/${exchangeProperty." + TRANSACTION_ID + "}"
+                + "/${exchangeProperty." + COLLECTION_TRANSACTION_ID + "}"
                 + "?bridgeEndpoint=true&throwExceptionOnFailure=false&"
                 + ConnectionUtils.getConnectionTimeoutDsl(airtelProps.getTimeout()))
-            .log(LoggingLevel.INFO, "Airtel Transaction status API called, response: \n\n ${body}");
+            .log(LoggingLevel.INFO, "Airtel Transaction status API called for id:"
+                + " ${exchangeProperty." + COLLECTION_TRANSACTION_ID + "}, response: \n\n ${body}");
 
         /*
          * Route to process the transaction status response received from Airtel
@@ -225,7 +230,13 @@ public class AirtelMoneyRouteBuilder extends RouteBuilder {
             .process(exchange -> {
                 CallbackDto callbackDto = exchange.getIn().getBody(CallbackDto.class);
                 CallbackDto.Transaction transaction = callbackDto.getTransaction();
-                exchange.setProperty(TRANSACTION_ID, transaction.getId());
+                String transactionId = transaction.getId();
+                // Remove the prefix from the transaction ID
+                if (transactionIdPrefix != null && !transactionIdPrefix.isBlank()
+                    && transactionId != null) {
+                    transactionId = transactionId.replaceFirst(transactionIdPrefix, "");
+                }
+                exchange.setProperty(TRANSACTION_ID, transactionId);
                 exchange.setProperty(CALLBACK_RECEIVED, true);
                 exchange.setProperty(CALLBACK, callbackDto.toString());
                 exchange.setProperty(AIRTEL_MONEY_ID, transaction.getAirtelMoneyId());

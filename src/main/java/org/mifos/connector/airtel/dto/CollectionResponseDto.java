@@ -81,8 +81,22 @@ public class CollectionResponseDto {
             public void setAirtelMoneyId(String airtelMoneyId) {
                 this.airtelMoneyId = airtelMoneyId;
             }
+
+            @Override
+            public String toString() {
+                return "Transaction{"
+                    + "id='" + id + '\''
+                    + ", message='" + message + '\''
+                    + ", status='" + status + '\''
+                    + ", airtelMoneyId='" + airtelMoneyId + '\''
+                    + '}';
+            }
         }
 
+        @Override
+        public String toString() {
+            return "Data{" + "transaction=" + transaction + '}';
+        }
     }
 
     /**
@@ -127,5 +141,23 @@ public class CollectionResponseDto {
         public void setSuccess(boolean success) {
             this.success = success;
         }
+
+        @Override
+        public String toString() {
+            return "Status{"
+                + "code='" + code + '\''
+                + ", message='" + message + '\''
+                + ", responseCode='" + responseCode + '\''
+                + ", success=" + success
+                + '}';
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "CollectionResponseDto{"
+            + "data=" + data
+            + ", status=" + status
+            + '}';
     }
 }

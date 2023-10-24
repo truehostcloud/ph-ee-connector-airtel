@@ -145,10 +145,12 @@ public class CollectionRequestDto {
      * @param channelRequest {@link JSONObject}
      * @param transactionId  ID of the transaction
      * @param countryCodes   a map with currency as key and country code as value
+     * @param transactionIdPrefix prefix to be included in the transaction ID
      * @return {@link CollectionRequestDto}
      */
     public static CollectionRequestDto fromChannelRequest(
-        JSONObject channelRequest, String transactionId, Map<String, String> countryCodes) {
+        JSONObject channelRequest, String transactionId, Map<String, String> countryCodes,
+        String transactionIdPrefix) {
         JSONObject amountJson = channelRequest.getJSONObject("amount");
         Subscriber subscriber = new Subscriber();
         String currency = amountJson.getString("currency");
@@ -165,7 +167,8 @@ public class CollectionRequestDto {
         transaction.amount = amountJson.getBigDecimal("amount");
         transaction.currency = currency;
         transaction.country = country;
-        transaction.id = transactionId;
+        transaction.id = transactionIdPrefix != null && !transactionIdPrefix.isBlank()
+            ? transactionIdPrefix + transactionId : transactionId;
         CollectionRequestDto collectionRequestDto = new CollectionRequestDto();
         collectionRequestDto.setReference("Payment to OAF");
         collectionRequestDto.subscriber = subscriber;

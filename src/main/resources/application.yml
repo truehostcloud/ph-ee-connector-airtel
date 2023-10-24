@@ -33,6 +33,8 @@ airtel:
 
 countryCodes: '{"rwf": "RW", "ugx": "UG", "kes": "KE"}'
 
+transaction-id-prefix: oaf-
+
 management:
   endpoint:
     health:
