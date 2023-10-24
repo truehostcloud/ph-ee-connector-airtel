@@ -18,4 +18,5 @@ public class CamelProperties {
     public static final String LAST_RESPONSE_BODY = "lastResponseBody";
     public static final String COUNTRY = "country";
     public static final String CURRENCY = "currency";
+    public static final String COLLECTION_TRANSACTION_ID = "collectionTransactionId";
 }

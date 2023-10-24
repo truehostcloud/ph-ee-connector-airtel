@@ -2,6 +2,7 @@ package org.mifos.connector.airtel.zeebe;
 
 import static org.mifos.connector.airtel.camel.config.CamelProperties.COLLECTION_REQUEST_BODY;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.COLLECTION_RESPONSE_BODY;
+import static org.mifos.connector.airtel.camel.config.CamelProperties.COLLECTION_TRANSACTION_ID;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.CORRELATION_ID;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.COUNTRY;
 import static org.mifos.connector.airtel.camel.config.CamelProperties.CURRENCY;
@@ -59,6 +60,9 @@ public class ZeebeWorkers {
     @Value("#{${countryCodes}}")
     private Map<String, String> countryCodes;
 
+    @Value("${transaction-id-prefix}")
+    private String transactionIdPrefix;
+
     /**
      * Creates an instance of {@link ZeebeWorkers} with all required params.
      *
@@ -95,7 +99,8 @@ public class ZeebeWorkers {
                     String transactionId = (String) variables.get(TRANSACTION_ID);
 
                     CollectionRequestDto collectionRequestDto = CollectionRequestDto
-                        .fromChannelRequest(channelRequest, transactionId, countryCodes);
+                        .fromChannelRequest(channelRequest, transactionId, countryCodes,
+                            transactionIdPrefix);
                     logger.info(collectionRequestDto.toString());
                     Exchange exchange = new DefaultExchange(camelContext);
                     exchange.setProperty(COLLECTION_REQUEST_BODY, collectionRequestDto);
@@ -164,10 +169,13 @@ public class ZeebeWorkers {
                     JSONObject channelRequest =
                         new JSONObject((String) variables.get(CHANNEL_REQUEST));
                     CollectionRequestDto collectionRequestDto = CollectionRequestDto
-                        .fromChannelRequest(channelRequest, transactionId, countryCodes);
+                        .fromChannelRequest(channelRequest, transactionId, countryCodes,
+                            transactionIdPrefix);
                     Exchange exchange = new DefaultExchange(camelContext);
-                    exchange.setProperty(CORRELATION_ID, variables.get("transactionId"));
-                    exchange.setProperty(TRANSACTION_ID, variables.get("transactionId"));
+                    exchange.setProperty(CORRELATION_ID, transactionId);
+                    exchange.setProperty(TRANSACTION_ID, transactionId);
+                    exchange.setProperty(COLLECTION_TRANSACTION_ID,
+                        collectionRequestDto.getTransaction().getId());
                     exchange.setProperty(COLLECTION_REQUEST_BODY, collectionRequestDto);
                     exchange.setProperty(SERVER_TRANSACTION_STATUS_RETRY_COUNT, retryCount);
                     exchange.setProperty(ZEEBE_ELEMENT_INSTANCE_KEY, job.getElementInstanceKey());
