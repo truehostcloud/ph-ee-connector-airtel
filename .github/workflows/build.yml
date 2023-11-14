@@ -68,7 +68,7 @@ jobs:
             oxsecurity/megalinter-java:v7
 
       - name: Login to Azure registry
-        run: docker login oaftech.azurecr.io -u ${{ env.ACR_PULL_USERNAME }} -p ${{ secrets.ACR_PULL_PASSWORD }}
+        run: docker login -u ${{ env.ACR_PULL_USERNAME }} -p ${{ secrets.ACR_PULL_PASSWORD }} oaftech.azurecr.io
 
       - name: Build and push image to container registry
         run: |
