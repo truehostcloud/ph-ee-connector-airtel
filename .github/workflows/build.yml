@@ -46,7 +46,7 @@ jobs:
             --env-file <(env | grep -e SYSTEM_ -e BUILD_ -e TF_ -e AGENT_) \
             -e CI=true \
             -e GITGUARDIAN_API_KEY \
-            gitguardian/ggshield:latest ggshield secret scan ci
+            gitguardian/ggshield:latest ggshield secret scan CI
 
       - name: Run MegaLinter
         run: |
