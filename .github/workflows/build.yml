@@ -85,12 +85,19 @@ jobs:
           docker push "oneacrefund/airtel-connector:${{ env.IMAGE_TAGS }}"
 
       - name: Publish configuration package
-        if: |
-          success() && (
+        if: >
+          success() &&
+          (
             github.event_name == 'push' &&
-            (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/' || startsWith(github.ref, 'refs/heads/feature/'))
+            (
+              github.ref == 'refs/heads/main' ||
+              github.ref == 'refs/heads/develop' ||
+              startsWith(github.ref, 'refs/heads/release/') ||
+              startsWith(github.ref, 'refs/heads/feature/')
+            )
           )
         uses: actions/upload-artifact@v2
         with:
           name: airtel-connector
           path: ${{ github.workspace }}
+
