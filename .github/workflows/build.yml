@@ -39,6 +39,9 @@ jobs:
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then IMAGE_TAGS="$VERSION_TAG,latest"; fi;
           echo "IMAGE_TAGS=${IMAGE_TAGS}"
 
+      - name: check CI environment
+        run: echo "CI environment is $CI"
+
       - name: GitGuardian Scan
         run: |
           docker run \
