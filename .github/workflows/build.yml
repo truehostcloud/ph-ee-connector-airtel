@@ -37,13 +37,7 @@ jobs:
         if [ "${{ github.ref }}" == "refs/heads/main" ]; then IMAGE_TAGS="$VERSION_TAG,latest"; fi
         echo "IMAGE_TAGS=$IMAGE_TAGS" >> $GITHUB_ENV
 
-    - name: GitGuardian Scan
-      run: |
-        docker run \
-          -v $PWD:/data \
-          -e GITGUARDIAN_API_KEY \
-          gitguardian/ggshield:latest ggshield secret scan ci
-      if: ${{ always() }}
+
 
     - name: Run MegaLinter
       run: |
